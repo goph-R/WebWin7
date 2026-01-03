@@ -6,6 +6,10 @@ This project was built purely for fun and nostalgia — no frameworks, no build 
 
 You can check it here: https://dynart.net/fun/win7
 
+## 🖼️ Screenshot
+
+![Application screenshot](screenshots/1.jpg)
+
 ## ✨ Features
 
 * 🪟 **Movable windows** (drag by title bar)
@@ -36,12 +40,7 @@ You can check it here: https://dynart.net/fun/win7
 ## 🚀 Getting Started
 
 1. Clone or download the project
-2. Put your assets next to `index.html`:
-
-   * `bg.jpg`
-   * `icon.png`
-   * `dog.jpg`
-3. Open `index.html` in a browser
+2. Open `index.html` in a browser
    *(no server required)*
 
 That’s it.
@@ -78,7 +77,7 @@ No frameworks. No dependencies. Just vibes.
 
 ## 🧑‍💻 Credits
 
-* **Project author:** You (the human who wanted this to exist)
+* **Project author:** Gábor László, gopher
 * **Main implementation & UI logic:** **ChatGPT**
 
   * Window manager logic
