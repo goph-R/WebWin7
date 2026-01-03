@@ -8,7 +8,7 @@ You can check it here: https://dynart.net/fun/win7
 
 ## 🖼️ Screenshot
 
-![Application screenshot](screenshots/1.jpg)
+![Application screenshot](screenshots/1.jpg?1)
 
 ## ✨ Features
 
