@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>7.css Window Manager (DIY)</title>
+
+  <!-- 7.css -->
+  <link rel="stylesheet" href="7.css" />
+
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      height: 100vh;
+      overflow: hidden;
+      background: url("bg.jpg") center center / cover no-repeat fixed;
+    }
+
+    /* Desktop layer */
+    .desktop {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Our window: absolute so we can move it */
+    .window.draggable {
+      position: absolute;
+      left: 80px;
+      top: 80px;
+      width: 400px;        /* you had max-width:400px; width feels more "window-like" */
+      max-width: 90vw;
+      user-select: none;   /* avoid selecting while dragging */
+      touch-action: none;  /* makes pointer dragging smoother on touch devices */
+    }
+
+    /* Allow selecting inside content */
+    .window .window-body {
+      user-select: text;
+      touch-action: auto;
+    }
+
+    .window .title-bar {
+      cursor: grab;
+    }
+    .window.dragging .title-bar {
+      cursor: grabbing;
+    }
+
+    /* Minimized state: show only title bar */
+    .window.minimized .window-body {
+      display: none;
+    }
+
+    /* Simple hidden/closed state */
+    .window.closed { display: none !important; }
+
+    /* When maximized, we fill the desktop */
+    .window.maximized {
+      left: 0 !important;
+      top: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+    }
+/* Make the window lay out title bar + body vertically */
+.window.draggable {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Let the body take all remaining space and be the scrolling area */
+.window.draggable .window-body {
+  flex: 1 1 auto;
+  min-height: 0;     /* IMPORTANT: allows inner overflow to work in flex */
+  overflow: auto;
+}
+
+/* Title bar should not flex */
+.window.draggable .title-bar {
+  flex: 0 0 auto;
+}
+
+    /*** VIDEO WRAP ***/
+
+    .video-wrap{
+      width: 100%;
+      aspect-ratio: 16 / 9; /* keep ratio while resizing */
+      position: relative;
+      overflow: hidden;
+    }
+
+    .video-wrap > iframe{
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+
+    /*** RESIZE ***/
+
+    /* Allow resizing to have room + prevent selection while resizing */
+    .window.resizable {
+      min-width: 260px;
+      min-height: 140px;
+      max-width: 100vw;
+      max-height: 100vh;      
+    }
+
+    /* Don’t show resize handles when maximized */
+    .window.maximized .resize-handle {
+      display: none;
+    }
+
+    /* Invisible handles */
+    .resize-handle {
+      position: absolute;
+      z-index: 10;
+      background: transparent;
+    }
+
+    /* Edges */
+    .resize-handle.n { top: -4px; left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+    .resize-handle.s { bottom: -4px; left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+    .resize-handle.e { right: -4px; top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+    .resize-handle.w { left: -4px; top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+
+    /* Corners */
+    .resize-handle.nw { left: -4px; top: -4px; width: 12px; height: 12px; cursor: nwse-resize; }
+    .resize-handle.ne { right: -4px; top: -4px; width: 12px; height: 12px; cursor: nesw-resize; }
+    .resize-handle.sw { left: -4px; bottom: -4px; width: 12px; height: 12px; cursor: nesw-resize; }
+    .resize-handle.se { right: -4px; bottom: -4px; width: 12px; height: 12px; cursor: nwse-resize; }
+
+    .window.resizable .window-body {
+      overflow: auto;
+    }
+
+
+/* --- Desktop icon --- */
+.desktop-icon {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+
+  width: 92px;
+  padding: 8px 6px;
+  border-radius: 4px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  cursor: default;
+  user-select: none;
+  outline: none;
+}
+
+/* icon image */
+.desktop-icon img {
+  width: 48px;
+  height: 48px;
+  image-rendering: auto;
+  pointer-events: none;
+}
+
+/* label */
+.desktop-icon .label {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.1;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* Windows-ish selection */
+.desktop-icon.selected {
+  background: rgba(0, 120, 215, 0.35);
+  outline: 1px solid rgba(160, 210, 255, 0.8);
+}
+
+/* selected label background like Windows */
+.desktop-icon.selected .label {
+  background: rgba(0, 120, 215, 0.55);
+}
+
+/* keyboard focus ring */
+.desktop-icon:focus-visible {
+  outline: 1px dotted rgba(255,255,255,0.9);
+  outline-offset: 2px;
+}
+
+.window .title-bar {
+  position: relative;
+  z-index: 20;
+}
+
+.window .title-bar-controls {
+  position: relative;
+  z-index: 30;
+}
+  </style>
+</head>
+
+<body>
+  <div class="desktop">
+
+<div id="appIcon" class="desktop-icon" tabindex="0" aria-label="Example App">
+  <img src="icon.png" alt="" />
+  <div class="label">Example App</div>
+</div>
+
+    <div id="appWindow" class="window active draggable resizable" style="width: 400px;">
+      <div class="title-bar">
+        <div class="title-bar-text">Another window with contents</div>
+        <div class="title-bar-controls">
+          <button id="btnMin" aria-label="Minimize" title="Minimize"></button>
+          <button id="btnMax" aria-label="Maximize" title="Maximize"></button>
+          <button id="btnClose" aria-label="Close" title="Close"></button>
+        </div>
+      </div>
+
+      <div class="window-body has-space">
+        <menu role="tablist" aria-label="Window with Tabs">
+          <button role="tab" aria-controls="music" aria-selected="true">Music</button>
+          <button role="tab" aria-controls="dogs">Dogs</button>
+          <button role="tab" aria-controls="food">Food</button>
+        </menu>
+
+        <article role="tabpanel" id="music">
+          <p>Set your listening preferences</p>
+          <fieldset>
+            <legend>Today's mood</legend>
+            <div>
+              <input id="radio33" type="radio" name="fieldset-example2">
+              <label for="radio33">Nicki Minaj</label>
+            </div>
+            <div>
+              <input id="radio34" type="radio" name="fieldset-example2">
+              <label for="radio34">Bell Towers</label>
+            </div>
+            <div>
+              <input id="radio35" type="radio" name="fieldset-example2">
+              <label for="radio35">The Glamorous Monique</label>
+            </div>
+            <div>
+              <input id="radio36" type="radio" name="fieldset-example2">
+              <label for="radio36">EN. V</label>
+            </div>
+          </fieldset>
+          <section style="display: flex; gap: 6px; align-items: center">
+            <button>Reset Alarm...</button>
+            <label>Try this to get some attention</label>
+          </section>
+        </article>
+
+        <article role="tabpanel" hidden id="dogs" style="overflow: hidden">
+          <img src="dog.jpg" style="width: 100%; max-width: 640px" />
+        </article>
+
+        <article role="tabpanel" hidden id="food">
+          <p>
+            You create the content for each tab by using an <code>article</code> tag.
+          </p>
+
+          <div class="video-wrap">
+            <iframe
+              src="https://www.youtube.com/embed/TODJBQ0tnow"
+              title="YouTube video player"
+              allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen>
+            </iframe>
+          </div>
+        </article>
+
+        <section style="display: flex; justify-content: flex-end; gap: 6px">
+          <button class="default">OK</button>
+          <button>Cancel</button>
+        </section>        
+      </div>
+
+      <!-- resize handles -->
+      <div class="resize-handle n"  data-dir="n"></div>
+      <div class="resize-handle s"  data-dir="s"></div>
+      <div class="resize-handle e"  data-dir="e"></div>
+      <div class="resize-handle w"  data-dir="w"></div>
+      <div class="resize-handle nw" data-dir="nw"></div>
+      <div class="resize-handle ne" data-dir="ne"></div>
+      <div class="resize-handle sw" data-dir="sw"></div>
+      <div class="resize-handle se" data-dir="se"></div>      
+    </div>
+  </div>
+
+<script>
+// -------- Tabs (simple + accessible-ish) --------
+(function setupTabs() {
+  const win = document.getElementById("appWindow");
+  const tabButtons = Array.from(win.querySelectorAll('menu[role="tablist"] > button[role="tab"]'));
+  const panels = Array.from(win.querySelectorAll('article[role="tabpanel"]'));
+
+  function activate(btn) {
+    const targetId = btn.getAttribute("aria-controls");
+
+    tabButtons.forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+    panels.forEach(p => {
+      if (p.id === targetId) p.removeAttribute("hidden");
+      else p.setAttribute("hidden", "");
+    });
+  }
+
+  tabButtons.forEach(btn => btn.addEventListener("click", () => activate(btn)));
+})();
+
+// -------- Window manager behavior (drag/min/max/close) --------
+(function setupWindow() {
+  const win = document.getElementById("appWindow");
+  const titleBar = win.querySelector(".title-bar");
+
+  const btnMin = document.getElementById("btnMin");
+  const btnMax = document.getElementById("btnMax");
+  const btnClose = document.getElementById("btnClose");
+
+  // store restore info for maximize/restore
+  let restore = { left: "80px", top: "80px", width: "400px", height: "" };
+
+  // ---- Helpers ----
+  function isMaximized() { return win.classList.contains("maximized"); }
+  function isMinimized() { return win.classList.contains("minimized"); }
+
+  function saveRestoreRect() {
+    const rect = win.getBoundingClientRect();
+    restore.left = rect.left + "px";
+    restore.top = rect.top + "px";
+    restore.width = rect.width + "px";
+    restore.height = win.style.height || "";
+  }
+
+  function restoreFromSaved() {
+    win.classList.remove("maximized");
+    win.style.left = restore.left;
+    win.style.top = restore.top;
+    win.style.width = restore.width;
+    win.style.height = restore.height;
+  }
+
+  function clamp(val, min, max) {
+    return Math.min(max, Math.max(min, val));
+  }
+
+  function bringToFront() {
+    // single-window demo: no z-index stacking needed
+    // If you later add multiple windows, implement z-index incrementing here.
+  }
+
+  // ---- Minimize ----
+  btnMin.addEventListener("click", (e) => {
+    e.stopPropagation();
+    win.classList.toggle("minimized");
+  });
+
+  // ---- Maximize/Restore ----
+  btnMax.addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    if (!isMaximized()) {
+      // If minimized, unminimize first
+      win.classList.remove("minimized");
+      saveRestoreRect();
+      win.classList.add("maximized");
+    } else {
+      restoreFromSaved();
+    }
+  });
+
+  // Double-click title bar to toggle maximize
+  titleBar.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".title-bar-controls")) return;
+    btnMax.click();
+  });
+
+  // ---- Close (hide) ----
+  btnClose.addEventListener("click", (e) => {
+    e.stopPropagation();
+    win.classList.add("closed");
+    console.log("win is:", win, "class:", win.className);
+    console.log("Has closed?", win.classList.contains("closed"));
+  });
+
+  // ---- Dragging ----
+  let dragging = false;
+  let pointerId = null;
+  let startX = 0, startY = 0;
+  let startLeft = 0, startTop = 0;
+
+  titleBar.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return; // left mouse only
+    if (e.target.closest(".title-bar-controls")) return;
+    if (isMaximized()) return; // typically you don't drag when maximized
+
+    bringToFront();
+
+    dragging = true;
+    pointerId = e.pointerId;
+    win.classList.add("dragging");
+
+    // capture pointer so we keep getting events
+    titleBar.setPointerCapture(pointerId);
+
+    const rect = win.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = rect.left;
+    startTop = rect.top;
+
+    // ensure absolute positioning in px
+    win.style.position = "absolute";
+    win.style.left = rect.left + "px";
+    win.style.top = rect.top + "px";
+
+    // prevent text selection / iframe weirdness
+    e.preventDefault();
+  });
+
+  function onMove(e) {
+    if (!dragging) return;
+
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    const rect = win.getBoundingClientRect();
+    const maxLeft = window.innerWidth - rect.width;
+    const maxTop = window.innerHeight - rect.height;
+
+    const newLeft = clamp(startLeft + dx, 0, Math.max(0, maxLeft));
+    const newTop = clamp(startTop + dy, 0, Math.max(0, maxTop));
+
+    win.style.left = newLeft + "px";
+    win.style.top = newTop + "px";
+  }
+
+  function stopDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    win.classList.remove("dragging");
+    try { titleBar.releasePointerCapture(pointerId); } catch {}
+    pointerId = null;
+  }
+
+  // listen on window so we always end the drag cleanly
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", stopDrag);
+  window.addEventListener("pointercancel", stopDrag);
+
+  // If user alt-tabs or leaves the page mid-drag, stop anyway
+  window.addEventListener("blur", () => { if (dragging) stopDrag({}); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && dragging) stopDrag({});
+  });
+
+  // Keep window within bounds on resize (especially if near edges)
+  window.addEventListener("resize", () => {
+    if (isMaximized() || win.classList.contains("closed")) return;
+    const rect = win.getBoundingClientRect();
+    const maxLeft = window.innerWidth - rect.width;
+    const maxTop = window.innerHeight - rect.height;
+    win.style.left = clamp(rect.left, 0, Math.max(0, maxLeft)) + "px";
+    win.style.top = clamp(rect.top, 0, Math.max(0, maxTop)) + "px";
+  });
+
+  // Click window to "activate"
+  win.addEventListener("mousedown", () => bringToFront());
+})();
+
+(function makeResizable() {
+  const win = document.getElementById("appWindow");
+
+  const minW = 260;
+  const minH = 140;
+
+  let resizing = false;
+  let dir = "";
+  let startX = 0, startY = 0;
+  let startLeft = 0, startTop = 0, startW = 0, startH = 0;
+  let pointerId = null;
+
+  const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+  function isMaximized() {
+    return win.classList.contains("maximized");
+  }
+
+  win.querySelectorAll(".resize-handle").forEach(h => {
+    h.addEventListener("pointerdown", (e) => {
+      if (isMaximized()) return;
+
+      resizing = true;
+      dir = h.dataset.dir;
+      pointerId = e.pointerId;
+
+      const rect = win.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+      startW = rect.width;
+      startH = rect.height;
+
+      // ensure style values are set in px
+      win.style.position = "absolute";
+      win.style.left = rect.left + "px";
+      win.style.top = rect.top + "px";
+      win.style.width = rect.width + "px";
+      win.style.height = rect.height + "px";
+
+      h.setPointerCapture(pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+
+  function onMove(e) {
+    if (!resizing) return;
+
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    // compute new rect based on direction
+    let newLeft = startLeft;
+    let newTop = startTop;
+    let newW = startW;
+    let newH = startH;
+
+    // East / West affect width (and left for W)
+    if (dir.includes("e")) newW = startW + dx;
+    if (dir.includes("w")) {
+      newW = startW - dx;
+      newLeft = startLeft + dx;
+    }
+
+    // South / North affect height (and top for N)
+    if (dir.includes("s")) newH = startH + dy;
+    if (dir.includes("n")) {
+      newH = startH - dy;
+      newTop = startTop + dy;
+    }
+
+    // enforce minimum sizes
+    if (newW < minW) {
+      if (dir.includes("w")) newLeft -= (minW - newW);
+      newW = minW;
+    }
+    if (newH < minH) {
+      if (dir.includes("n")) newTop -= (minH - newH);
+      newH = minH;
+    }
+
+    // keep inside viewport (simple clamp)
+    const maxLeft = window.innerWidth - newW;
+    const maxTop = window.innerHeight - newH;
+    newLeft = clamp(newLeft, 0, Math.max(0, maxLeft));
+    newTop = clamp(newTop, 0, Math.max(0, maxTop));
+
+    // apply
+    win.style.left = newLeft + "px";
+    win.style.top = newTop + "px";
+    win.style.width = newW + "px";
+    win.style.height = newH + "px";
+  }
+
+  function stop(e) {
+    if (!resizing) return;
+    resizing = false;
+    try {
+      // release capture from whichever handle started it
+      win.querySelector(`.resize-handle[data-dir="${dir}"]`)?.releasePointerCapture(pointerId);
+    } catch {}
+    pointerId = null;
+    dir = "";
+  }
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
+})();
+</script>
+
+<script>
+(function setupDesktopIcon() {
+  const icon = document.getElementById("appIcon");
+  const win = document.getElementById("appWindow");
+
+  function selectIcon(on) {
+    icon.classList.toggle("selected", !!on);
+    if (on) icon.focus({ preventScroll: true });
+  }
+
+  function openWindow() {
+    win.classList.remove("closed");
+    // If it was minimized, restore it
+    win.classList.remove("minimized");
+  }
+
+  // Single click selects (Windows-style)
+  icon.addEventListener("click", (e) => {
+    e.stopPropagation();
+    selectIcon(true);
+  });
+
+  // Double click opens
+  icon.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    openWindow();
+  });
+
+  // Keyboard: Enter/Space opens
+  icon.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openWindow();
+    }
+  });
+
+  // Click empty desktop clears selection
+  document.querySelector(".desktop").addEventListener("click", () => {
+    selectIcon(false);
+  });
+
+  // Clicking the window should deselect the icon (optional, feels Windows-y)
+  win.addEventListener("mousedown", () => selectIcon(false));
+})();
+</script>
+
+</body>
+</html>
