@@ -12,7 +12,7 @@ You can check it here: https://dynart.net/fun/win7
 
 ## ✨ Features
 
-* 🪟 **Movable windows** (drag by title bar)
+* 🖥️ **Movable windows** (drag by title bar)
 * 📐 **Resizable windows** (edges + corners)
 * 🗖 **Minimize / Maximize / Close**
 * 🧭 **Tabbed window content**
